@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Simple Chat App</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; background: #f2f2f2; }
+    .header { display: flex; align-items: center; background: #fff; padding: 12px 8px; box-shadow: 0 2px 4px #0001; }
+    .search { flex: 1; margin-right: 8px; }
+    .search input { width: 100%; padding: 6px 10px; border: 1px solid #ddd; border-radius: 5px; }
+    .dots { font-size: 22px; cursor: pointer; }
+    .chat-box { background: #fff; margin: 16px; border-radius: 8px; padding: 10px; min-height: 220px; }
+    .chat-msg { margin-bottom: 8px; }
+    .chat-msg.you { text-align: right; color: #333; }
+    .chat-msg.other { text-align: left; color: #555; }
+    .controls { display: flex; margin: 0 16px 12px 16px; }
+    .controls input { flex: 1; padding: 8px; margin-right: 8px; border-radius: 5px; border: 1px solid #ccc; }
+    .controls button { padding: 8px 18px; border: none; border-radius: 6px; background: #3a86ff; color: #fff; }
+    .login-box { max-width: 340px; margin: 80px auto; background: #fff; padding: 24px 18px 18px 18px; border-radius: 12px; box-shadow: 0 2px 12px #0003; }
+    .login-box input { width: 100%; margin-bottom: 10px; padding: 10px; border-radius: 7px; border: 1px solid #ccc; }
+    .login-box button { width: 100%; padding: 10px; border: none; border-radius: 7px; background: #2b9348; color: #fff; }
+    .modal { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:#0002; justify-content:center; align-items:center; }
+    .modal-content { background:#fff; padding:20px; border-radius:10px; min-width:300px; }
+    .modal input { width:100%; margin-bottom:12px; padding:8px; border-radius:4px; border:1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="search"><input type="text" id="searchInput" placeholder="Search code..."/></div>
+    <div class="dots" id="settingsBtn">&#x22EE;</div>
+  </div>
+  <div id="chatApp" style="display:none;">
+    <div style="margin:16px 16px 0 16px;">
+      <label>Connect with code:</label>
+      <select id="userCodeSel"></select>
+    </div>
+    <div class="chat-box" id="chatBox"></div>
+    <div class="controls">
+      <input id="msgInput" type="text" placeholder="Type a message..."/>
+      <button onclick="sendMsg()">Send</button>
+    </div>
+  </div>
+  <div class="login-box" id="loginBox">
+    <h3>Login</h3>
+    <input id="userInput" type="text" placeholder="Username"/>
+    <input id="passInput" type="password" placeholder="Password"/>
+    <button onclick="login()">Login</button>
+    <div id="loginErr" style="color:red; font-size:13px; min-height:20px;"></div>
+  </div>
+
+  <div class="modal" id="addModal">
+    <div class="modal-content">
+      <h4>Add Member (Admin)</h4>
+      <input id="newUser" placeholder="Username"/>
+      <input id="newPass" type="password" placeholder="Password"/>
+      <input id="newCode" placeholder="Code (e.g. 💸1)"/>
+      <button onclick="addMember()">Add</button>
+      <button onclick="closeModal()" style="background:#bbb; color:#333; margin-top:8px;">Close</button>
+      <div id="addErr" style="color:red; font-size:13px; min-height:20px;"></div>
+    </div>
+  </div>
+
+<script>
+let users = [
+  {username:'ansab', password:'ansab', code:'💸1'},
+  {username:'user2', password:'user2', code:'🥈2'},
+];
+let adminPass = 'ANSAB';
+let currentUser = null, currentCode = null;
+
+function renderCodes() {
+  let s = document.getElementById('userCodeSel');
+  s.innerHTML = '';
+  users.forEach(u=> {
+    let o = document.createElement('option');
+    o.value = u.code;
+    o.text = u.code + ' ('+u.username+')';
+    s.appendChild(o);
+  });
+  s.value = currentCode || users[0].code;
+}
+
+function login() {
+  let u = document.getElementById('userInput').value.trim();
+  let p = document.getElementById('passInput').value.trim();
+  let user = users.find(e=>e.username===u && e.password===p);
+  if(user) {
+    currentUser = user;
+    currentCode = user.code;
+    document.getElementById('loginBox').style.display='none';
+    document.getElementById('chatApp').style.display='';
+    renderCodes();
+    renderChat();
+    document.getElementById('msgInput').focus();
+    document.getElementById('loginErr').innerText='';
+  } else {
+    document.getElementById('loginErr').innerText='Invalid username or password!';
+  }
+}
+
+function sendMsg() {
+  let msg = document.getElementById('msgInput').value;
+  if(!msg.trim()) return;
+  let toCode = document.getElementById('userCodeSel').value;
+  let chatKey = 'chat__' + [currentUser.code,toCode].sort().join('_');
+  let hist = JSON.parse(localStorage.getItem(chatKey)||'[]');
+  hist.push({from:currentUser.code, text:msg, ts:Date.now()});
+  localStorage.setItem(chatKey, JSON.stringify(hist));
+  document.getElementById('msgInput').value='';
+  renderChat();
+}
+
+function renderChat() {
+  let toCode = document.getElementById('userCodeSel').value;
+  let chatKey = 'chat__' + [currentUser.code,toCode].sort().join('_');
+  let hist = JSON.parse(localStorage.getItem(chatKey)||'[]');
+  let box = document.getElementById('chatBox');
+  box.innerHTML = hist.map(m=>`<div class="chat-msg ${m.from===currentUser.code?'you':'other'}">${m.text}</div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+document.getElementById('userCodeSel').onchange=renderChat;
+
+// Settings Modal Logic
+document.getElementById('settingsBtn').onclick = function() {
+  let adminEntered = prompt("Enter admin password to add member:");
+  if(adminEntered === adminPass) {
+    document.getElementById('addModal').style.display='flex';
+    document.getElementById('addErr').innerText='';
+    document.getElementById('newUser').value='';
+    document.getElementById('newPass').value='';
+    document.getElementById('newCode').value='';
+  } else if(adminEntered !== null) {
+    alert('Wrong admin password!');
+  }
+};
+
+function closeModal() {
+  document.getElementById('addModal').style.display='none';
+}
+function addMember() {
+  let uname = document.getElementById('newUser').value.trim();
+  let upass = document.getElementById('newPass').value.trim();
+  let ucode = document.getElementById('newCode').value.trim();
+  if(!uname||!upass||!ucode) {
+    document.getElementById('addErr').innerText='All fields required!';
+    return;
+  }
+  if(users.find(u=>u.username===uname||u.code===ucode)) {
+    document.getElementById('addErr').innerText='Username or code exists!';
+    return;
+  }
+  users.push({username:uname, password:upass, code:ucode});
+  renderCodes();
+  closeModal();
+  alert('User added!');
+}
+
+// Search Codes
+document.getElementById('searchInput').oninput = function() {
+  let val = this.value.trim();
+  let found = users.find(u=>u.code.includes(val) || u.username.includes(val));
+  if(found) {
+    document.getElementById('userCodeSel').value = found.code;
+    renderChat();
+  }
+};
+</script>
+</body>
+</html>
